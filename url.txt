@@ -1,0 +1,17 @@
+
+https://biomimetics.mit.edu/
+
+
+https://lib.mit.edu/search/bento?q=MIT+Mini+Cheetah
+
+
+https://github.com/mit-biomimetics/Cheetah-Software
+
+
+https://os.mbed.com/users/benkatz/code/SPIne/
+
+https://os.mbed.com/users/benkatz/code/Hobbyking_Cheetah_Compact_DRV8323/
+
+https://github.com/bgkatz/SPIne
+
+https://github.com/bgkatz/3phase_integrated
