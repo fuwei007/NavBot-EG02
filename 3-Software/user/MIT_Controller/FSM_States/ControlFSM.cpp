@@ -6,6 +6,7 @@
  */
 
 #include "ControlFSM.h"
+#include <cstdio>
 #include <rt/rt_rc_interface.h>
 
 /**
@@ -195,6 +196,15 @@ FSM_OperatingMode ControlFSM<T>::safetyPreCheck() {
   // Check for safe orientation if the current state requires it
   if (currentState->checkSafeOrientation && data.controlParameters->control_mode != K_RECOVERY_STAND) {
     if (!safetyChecker->checkSafeOrientation()) {
+      int rc_mode = -1;
+      if (data._desiredStateCommand && data._desiredStateCommand->rcCommand) {
+        rc_mode = data._desiredStateCommand->rcCommand->mode;
+      }
+      std::printf("[SAFETY][ESTOP] state=%s control_mode=%d rc_mode=%d iter=%d\n",
+                  currentState->stateString.c_str(),
+                  static_cast<int>(data.controlParameters->control_mode),
+                  rc_mode,
+                  iter);
       operatingMode = FSM_OperatingMode::ESTOP;
       std::cout << "broken: Orientation Safety Ceck FAIL" << std::endl;
     }

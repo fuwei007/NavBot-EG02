@@ -14,6 +14,7 @@
 
 #define termios asmtermios
 
+#include <sys/ioctl.h>
 #include <asm/termios.h>
 
 #undef termios
@@ -21,7 +22,7 @@
 #include <termios.h>
 #include <math.h>
 #include <pthread.h>
-#include <stropts.h>
+//#include <stropts.h>
 #include <endian.h>
 #include <stdint.h>
 

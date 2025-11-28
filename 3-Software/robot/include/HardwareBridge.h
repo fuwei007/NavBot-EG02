@@ -14,9 +14,11 @@
 #define MAX_STACK_SIZE 16384  // 16KB  of stack
 #define TASK_PRIORITY 49      // linux priority, this is not the nice value
 
+#include <cstring>
 #include <string>
 #include <lcm-cpp.hpp>
-#include <lord_imu/LordImu.h>
+#include "SimUtilities/LinuxGamepad.h"
+#include "WheeltecImu.h"
 
 #include "RobotRunner.h"
 #include "Utilities/PeriodicTask.h"
@@ -40,6 +42,8 @@ class HardwareBridge {
         _visualizationLCM(getLcmUrl(255)) {
     _controller = robot_ctrl;
     _userControlParameters = robot_ctrl->getUserControlParameters();
+    std::memset(&_parameter_response_lcmt, 0,
+                sizeof(_parameter_response_lcmt));
         }
   void prefaultStack();
   void setupScheduler();
@@ -93,19 +97,24 @@ class MiniCheetahHardwareBridge : public HardwareBridge {
   void runSpi();
   void initHardware();
   void run();
-  void runMicrostrain();
-  void logMicrostrain();
+  void runImu();
+  void runGamepad();
+  void logImu();
   void abort(const std::string& reason);
   void abort(const char* reason);
 
  private:
   VectorNavData _vectorNavData;
   lcm::LCM _spiLcm;
-  lcm::LCM _microstrainLcm;
-  std::thread _microstrainThread;
-  LordImu _microstrainImu;
-  microstrain_lcmt _microstrainData;
-  bool _microstrainInit = false;
+  lcm::LCM _imuLcm;
+  std::thread _imuThread;
+  std::thread _gamepadThread;
+  WheeltecImu _wheeltecImu;
+  LinuxGamepad _linuxGamepad;
+  microstrain_lcmt _imuData;
+  bool _imuInit = false;
+  bool _gamepadInit = false;
+  std::string _gamepadDevice;
   bool _load_parameters_from_file;
 };
 

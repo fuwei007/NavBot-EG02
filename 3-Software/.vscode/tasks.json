@@ -1,0 +1,10 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "CMake: Configure", "type": "shell", "command": "cmake -S . -B mc-build -DMINI_CHEETAH_BUILD=TRUE -DJCQP_USE_AVX2=OFF", "options": { "cwd": "${workspaceFolder}" } },
+    { "label": "CMake: Build", "type": "shell", "command": "cmake --build mc-build -j12", "options": { "cwd": "${workspaceFolder}" } },
+
+    { "label": "Run (Sim)", "type": "shell", "command": "sudo ./user/MIT_Controller/mit_ctrl m s", "options": { "cwd": "${workspaceFolder}/mc-build" } },
+    { "label": "Run (Real)", "type": "shell", "command": "sudo ./user/MIT_Controller/mit_ctrl m r f", "options": { "cwd": "${workspaceFolder}/mc-build" } }
+  ]
+}

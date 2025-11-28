@@ -6,6 +6,7 @@
 
 #include "FSM_State_BalanceStand.h"
 #include <Controllers/WBC_Ctrl/LocomotionCtrl/LocomotionCtrl.hpp>
+#include "Utilities/Log.h"
 
 /**
  * Constructor for the FSM State that passes in state specific info to
@@ -45,9 +46,10 @@ void FSM_State_BalanceStand<T>::onEnter() {
   
   _ini_body_pos = (this->_data->_stateEstimator->getResult()).position;
 
-  if(_ini_body_pos[2] < 0.2) {
-    _ini_body_pos[2] = 0.3;
-  }
+  // Remove forced height jump to prevent sudden leg extension
+  // if(_ini_body_pos[2] < 0.2) {
+  //   _ini_body_pos[2] = 0.3;
+  // }
 
   last_height_command = _ini_body_pos[2];
 
@@ -218,7 +220,26 @@ void FSM_State_BalanceStand<T>::BalanceStandStep() {
   _wbc_data->vBody_des.setZero();
   _wbc_data->aBody_des.setZero();
 
+  // [Control Logic: Proportional / "Spring-back"]
+  // Always reset target to initial state first
+  _wbc_data->pBody_des = _ini_body_pos;
   _wbc_data->pBody_RPY_des = _ini_body_ori_rpy;
+
+  // Then superimpose joystick input
+  // When joystick is released (all 0), target returns to _ini
+  const rc_control_settings* rc_cmd = this->_data->_desiredStateCommand->rcCommand;
+  if (rc_cmd) {
+    // Orientation
+    _wbc_data->pBody_RPY_des[0] += rc_cmd->rpy_des[0] * 1.0; // Roll
+    _wbc_data->pBody_RPY_des[1] += rc_cmd->rpy_des[1] * 1.0; // Pitch
+    _wbc_data->pBody_RPY_des[2] -= rc_cmd->rpy_des[2] * 1.0; // Yaw
+
+    // Height
+    _wbc_data->pBody_des[2] += 0.12 * rc_cmd->height_variation;
+  }
+
+  // Old logic removed
+  /*
   if(this->_data->controlParameters->use_rc){
     const rc_control_settings* rc_cmd = this->_data->_desiredStateCommand->rcCommand;
     // Orientation
@@ -229,18 +250,19 @@ void FSM_State_BalanceStand<T>::BalanceStandStep() {
     // Height
     _wbc_data->pBody_des[2] += 0.12 * rc_cmd->height_variation;
   }else{
-    // Orientation
-    _wbc_data->pBody_RPY_des[0] = 
-     0.6* this->_data->_desiredStateCommand->gamepadCommand->leftStickAnalog[0];
-     _wbc_data->pBody_RPY_des[1] = 
-      0.6*this->_data->_desiredStateCommand->gamepadCommand->rightStickAnalog[0];
-    _wbc_data->pBody_RPY_des[2] -= 
-      this->_data->_desiredStateCommand->gamepadCommand->rightStickAnalog[1];
+    // 手柄禁用：锁定在进入时的姿态
+    _wbc_data->pBody_RPY_des = _ini_body_ori_rpy;
     
-    // Height
-    _wbc_data->pBody_des[2] += 
-      0.12 * this->_data->_desiredStateCommand->gamepadCommand->rightStickAnalog[0];
+    // [Height Ramp] Removed to maintain initial height
+    // if (_wbc_data->pBody_des[2] < 0.25) {
+    //   _wbc_data->pBody_des[2] += 0.0005; 
+    // }
+    // Ensure it doesn't drop back down if ini was high (though unlikely given log)
+    if (_wbc_data->pBody_des[2] < _ini_body_pos[2]) {
+       _wbc_data->pBody_des[2] = _ini_body_pos[2]; 
+    }
   }
+  */
   _wbc_data->vBody_Ori_des.setZero();
 
   for(size_t i(0); i<4; ++i){
@@ -262,6 +284,31 @@ void FSM_State_BalanceStand<T>::BalanceStandStep() {
   last_height_command = _wbc_data->pBody_des[2];
 
   _wbc_ctrl->run(_wbc_data, *this->_data);
+
+  // [DEBUG LOG] Monitor WBC behavior
+  static int s_balance_log_decimator = 0;
+  if ((s_balance_log_decimator++ % 100) == 0) {
+    auto& se = this->_data->_stateEstimator->getResult();
+    LOG_INFO("[BAL] BodyPos Est=[{:.3f} {:.3f} {:.3f}] Des=[{:.3f} {:.3f} {:.3f}]",
+             (double)se.position[0], (double)se.position[1], (double)se.position[2],
+             (double)_wbc_data->pBody_des[0], (double)_wbc_data->pBody_des[1], (double)_wbc_data->pBody_des[2]);
+    LOG_INFO("[BAL] BodyRPY Est=[{:.3f} {:.3f} {:.3f}] Des=[{:.3f} {:.3f} {:.3f}]",
+             (double)se.rpy[0], (double)se.rpy[1], (double)se.rpy[2],
+             (double)_wbc_data->pBody_RPY_des[0], (double)_wbc_data->pBody_RPY_des[1], (double)_wbc_data->pBody_RPY_des[2]);
+    
+    for (int i = 0; i < 4; ++i) {
+       auto& cmd = this->_data->_legController->commands[i];
+       auto& data = this->_data->_legController->datas[i];
+       // Add Fr_des logging
+       auto& fr = _wbc_data->Fr_des[i];
+       LOG_INFO("[BAL] Leg{} qDes=[{:.2f} {:.2f} {:.2f}] q=[{:.2f} {:.2f} {:.2f}] tau=[{:.1f} {:.1f} {:.1f}] Fr=[{:.1f} {:.1f} {:.1f}]",
+                i, 
+                (double)cmd.qDes[0], (double)cmd.qDes[1], (double)cmd.qDes[2],
+                (double)data.q[0], (double)data.q[1], (double)data.q[2],
+                (double)cmd.tauFeedForward[0], (double)cmd.tauFeedForward[1], (double)cmd.tauFeedForward[2],
+                (double)fr[0], (double)fr[1], (double)fr[2]);
+    }
+  }
 }
 
 // template class FSM_State_BalanceStand<double>;

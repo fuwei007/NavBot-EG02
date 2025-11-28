@@ -70,9 +70,14 @@ void RobotInterface::handleVisualizationData(
     _fwdKinState.bodyPosition[i] = msg->x[i];
   }
 
+  Quat<double> quat;
   for (int i = 0; i < 4; i++) {
-    _fwdKinState.bodyOrientation[i] = msg->quat[i];
+    quat[i] = static_cast<double>(msg->quat[i]);
   }
+  quat[1] = -quat[1];
+  quat[2] = -quat[2];
+  quat[3] = -quat[3];
+  _fwdKinState.bodyOrientation = quat;
 
   for (int i = 0; i < 12; i++) {
     _fwdKinState.q[i] = msg->q[i];

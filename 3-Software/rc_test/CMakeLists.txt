@@ -9,16 +9,16 @@ include_directories("../third-party")
 include_directories("../third-party/ParamHandler")
 include_directories("../third-party/vectornav/include")
 include_directories("../third-party/vectornav/include/vn")
-include_directories("../third-party/lord_imu/Include")
+include_directories("../third-party/wheeltec_imu")
 
 include_directories("../lcm-types/cpp")
-include_directories("/usr/local/include/lcm/")   # lcm includes
+include_directories("/usr/include/lcm/")   # lcm includes
 
 file(GLOB sources "*.cpp")
 
 add_executable(rc_test ${sources})
 
-target_link_libraries(rc_test biomimetics pthread lcm inih dynacore_param_handler lord_imu robot)
+target_link_libraries(rc_test biomimetics pthread lcm inih dynacore_param_handler wheeltec_imu robot)
 if(CMAKE_SYSTEM_NAME MATCHES Linux)
     target_link_libraries(rc_test libvnc rt)
 endif()

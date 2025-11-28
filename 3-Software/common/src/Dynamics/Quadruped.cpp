@@ -10,6 +10,7 @@
 #include "Dynamics/Quadruped.h"
 #include "Dynamics/spatial.h"
 #include "Math/orientation_tools.h"
+#include "Utilities/Log.h"
 
 using namespace ori;
 using namespace spatial;
@@ -19,6 +20,13 @@ using namespace spatial;
  */
 template <typename T>
 bool Quadruped<T>::buildModel(FloatingBaseModel<T>& model) {
+  static bool s_printed_params = false;
+  if (!s_printed_params) {
+     LOG_INFO("[Quadruped] Building Model with params: BodyMass={:.3f} AbadL={:.3f} HipL={:.3f} KneeL={:.3f} KneeYOff={:.3f}",
+              (double)_bodyMass, (double)_abadLinkLength, (double)_hipLinkLength, (double)_kneeLinkLength, (double)_kneeLinkY_offset);
+     s_printed_params = true;
+  }
+
   // we assume the cheetah's body (not including rotors) can be modeled as a
   // uniformly distributed box.
   Vec3<T> bodyDims(_bodyLength, _bodyWidth, _bodyHeight);

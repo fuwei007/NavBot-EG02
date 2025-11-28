@@ -9,6 +9,7 @@
  */
 
 #include "Controllers/GaitScheduler.h"
+#include "Utilities/Log.h"
 
 /*=========================== Gait Data ===============================*/
 /**
@@ -70,7 +71,7 @@ GaitScheduler<T>::GaitScheduler(MIT_UserParameters* _userParameters, float _dt) 
  */
 template <typename T>
 void GaitScheduler<T>::initialize() {
-  std::cout << "[GAIT] Initialize Gait Scheduler" << std::endl;
+  LOG_INFO("[GAIT] Initialize Gait Scheduler");
 
   // Start the gait in a trot since we use this the most
   gaitData._currentGait = GaitType::STAND;
@@ -273,9 +274,7 @@ void GaitScheduler<T>::modifyGait() {
  */
 template <typename T>
 void GaitScheduler<T>::createGait() {
-
-  std::cout << "[GAIT] Transitioning gait from " << gaitData.gaitName
-            << " to ";
+  std::string oldGaitName = gaitData.gaitName;
 
   // Case structure gets the appropriate parameters
   switch (gaitData._nextGait) {
@@ -463,7 +462,7 @@ void GaitScheduler<T>::createGait() {
   // Gait has switched
   gaitData._currentGait = gaitData._nextGait;
 
-  std::cout << gaitData.gaitName << "\n" << std::endl;
+  LOG_INFO("[GAIT] Transitioning gait from {} to {}", oldGaitName, gaitData.gaitName);
 
   // Calculate the auxilliary gait information
   calcAuxiliaryGaitData();
@@ -538,32 +537,31 @@ void GaitScheduler<T>::printGaitInfo() {
 
   // Print at requested frequency
   if (printIter == printNum) {
-    std::cout << "[GAIT SCHEDULER] Printing Gait Info...\n";
-    std::cout << "Gait Type: " << gaitData.gaitName << "\n";
-    std::cout << "---------------------------------------------------------\n";
-    std::cout << "Enabled: " << gaitData.gaitEnabled(0) << " | "
-              << gaitData.gaitEnabled(1) << " | " << gaitData.gaitEnabled(2)
-              << " | " << gaitData.gaitEnabled(3) << "\n";
-    std::cout << "Period Time: " << gaitData.periodTime(0) << "s | "
-              << gaitData.periodTime(1) << "s | " << gaitData.periodTime(2)
-              << "s | " << gaitData.periodTime(3) << "s\n";
-    std::cout << "---------------------------------------------------------\n";
-    std::cout << "Contact State: " << gaitData.contactStateScheduled(0) << " | "
-              << gaitData.contactStateScheduled(1) << " | "
-              << gaitData.contactStateScheduled(2) << " | "
-              << gaitData.contactStateScheduled(3) << "\n";
-    std::cout << "Phase Variable: " << gaitData.phaseVariable(0) << " | "
-              << gaitData.phaseVariable(1) << " | " << gaitData.phaseVariable(2)
-              << " | " << gaitData.phaseVariable(3) << "\n";
-    std::cout << "Stance Time Remaining: " << gaitData.timeStanceRemaining(0)
-              << "s | " << gaitData.timeStanceRemaining(1) << "s | "
-              << gaitData.timeStanceRemaining(2) << "s | "
-              << gaitData.timeStanceRemaining(3) << "s\n";
-    std::cout << "Swing Time Remaining: " << gaitData.timeSwingRemaining(0)
-              << "s | " << gaitData.timeSwingRemaining(1) << "s | "
-              << gaitData.timeSwingRemaining(2) << "s | "
-              << gaitData.timeSwingRemaining(3) << "s\n";
-    std::cout << std::endl;
+    LOG_INFO("[GAIT SCHEDULER] Printing Gait Info...");
+    LOG_INFO("Gait Type: {}", gaitData.gaitName);
+    LOG_INFO("---------------------------------------------------------");
+    LOG_INFO("Enabled: {} | {} | {} | {}", gaitData.gaitEnabled(0),
+              gaitData.gaitEnabled(1), gaitData.gaitEnabled(2),
+              gaitData.gaitEnabled(3));
+    LOG_INFO("Period Time: {}s | {}s | {}s | {}s", gaitData.periodTime(0),
+              gaitData.periodTime(1), gaitData.periodTime(2),
+              gaitData.periodTime(3));
+    LOG_INFO("---------------------------------------------------------");
+    LOG_INFO("Contact State: {} | {} | {} | {}", gaitData.contactStateScheduled(0),
+              gaitData.contactStateScheduled(1),
+              gaitData.contactStateScheduled(2),
+              gaitData.contactStateScheduled(3));
+    LOG_INFO("Phase Variable: {} | {} | {} | {}", gaitData.phaseVariable(0),
+              gaitData.phaseVariable(1), gaitData.phaseVariable(2),
+              gaitData.phaseVariable(3));
+    LOG_INFO("Stance Time Remaining: {}s | {}s | {}s | {}s", gaitData.timeStanceRemaining(0),
+              gaitData.timeStanceRemaining(1),
+              gaitData.timeStanceRemaining(2),
+              gaitData.timeStanceRemaining(3));
+    LOG_INFO("Swing Time Remaining: {}s | {}s | {}s | {}s", gaitData.timeSwingRemaining(0),
+              gaitData.timeSwingRemaining(1),
+              gaitData.timeSwingRemaining(2),
+              gaitData.timeSwingRemaining(3));
 
     // Reset iteration counter
     printIter = 0;

@@ -8,8 +8,10 @@
 
 #include <main_helper.h>
 #include "MIT_Controller.hpp"
+#include "Utilities/Log.h"
 
 int main(int argc, char** argv) {
+  initLogger();
   main_helper(argc, argv, new MIT_Controller());
   return 0;
 }

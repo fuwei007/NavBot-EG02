@@ -16,6 +16,8 @@
 #include "ParamHandler.hpp"
 #include "Utilities/Timer.h"
 #include "Controllers/PositionVelocityEstimator.h"
+#include "user/MIT_Controller/FSM_States/FSM_State.h"
+#include "Utilities/Log.h"
 //#include "rt/rt_interface_lcm.h"
 
 RobotRunner::RobotRunner(RobotController* robot_ctrl, 
@@ -32,7 +34,7 @@ RobotRunner::RobotRunner(RobotController* robot_ctrl,
  * robot data, and any control logic specific data.
  */
 void RobotRunner::init() {
-  printf("[RobotRunner] initialize\n");
+  LOG_INFO("[RobotRunner] initialize");
 
   // Build the appropriate Quadruped object
   if (robotType == RobotType::MINI_CHEETAH) {
@@ -75,6 +77,11 @@ void RobotRunner::init() {
 
   _robot_ctrl->initializeController();
 
+  _gamepadPrevStart = false;
+  _gamepadPrevBack = false;
+  _gamepadPrevY = false;
+  _gamepadPrevX = false;
+
 }
 
 /**
@@ -88,8 +95,83 @@ void RobotRunner::run() {
   //cheetahMainVisualization->p = _stateEstimate.position;
   visualizationData->clear();
 
+  if (controlParameters && controlParameters->use_rc == 0 && driverCommand) {
+    bool startPressed = driverCommand->start;
+    bool backPressed = driverCommand->back;
+    bool yPressed = driverCommand->y;
+    bool xPressed = driverCommand->x;
+    auto logButtonEdge = [&](const char* name, bool pressed) {
+      LOG_WARN("[GAMEPAD] {} {}", name, pressed ? "pressed" : "released");
+    };
+
+    auto setMode = [&](int mode) {
+      if (controlParameters->control_mode != static_cast<double>(mode)) {
+        LOG_WARN("[GAMEPAD] control_mode {:.0f} -> {}",
+                    controlParameters->control_mode, mode);
+        controlParameters->control_mode = static_cast<double>(mode);
+      }
+    };
+
+    if (startPressed != _gamepadPrevStart) {
+      logButtonEdge("Start", startPressed);
+    }
+    if (yPressed != _gamepadPrevY) {
+      logButtonEdge("Y", yPressed);
+    }
+    if (xPressed != _gamepadPrevX) {
+      logButtonEdge("X", xPressed);
+    }
+    if (backPressed != _gamepadPrevBack) {
+      logButtonEdge("Back", backPressed);
+    }
+
+    if (startPressed && !_gamepadPrevStart) {
+      setMode(K_STAND_UP);
+    }
+    if (yPressed && !_gamepadPrevY) {
+      setMode(K_LOCOMOTION);
+    }
+    if (xPressed && !_gamepadPrevX) {
+      setMode(K_BALANCE_STAND);
+    }
+    if (backPressed && !_gamepadPrevBack) {
+      setMode(K_PASSIVE);
+    }
+
+    _gamepadPrevStart = startPressed;
+    _gamepadPrevBack = backPressed;
+    _gamepadPrevY = yPressed;
+    _gamepadPrevX = xPressed;
+  }
+
   // Update the data from the robot
   setupStep();
+
+  if (controlParameters && controlParameters->use_rc == 0 && driverCommand) {
+    // [Gamepad -> RC Mapping]
+    // Map gamepad sticks to rc_control for BalanceStand/Locomotion (MIT Standard Layout)
+    rc_control.mode = controlParameters->control_mode; 
+    
+    // Sensitivity Scaling
+    const float kScaleRPY = 0.35f; // Reduced sensitivity
+    const float kScaleH   = 0.4f;  // Reduced sensitivity
+
+    // Right Stick: Orientation (Roll/Pitch)
+    rc_control.rpy_des[0] = driverCommand->rightStickAnalog[0] * kScaleRPY; // Roll = RX
+    rc_control.rpy_des[1] = driverCommand->rightStickAnalog[1] * kScaleRPY; // Pitch = RY
+    
+    // Left Stick: Yaw & Height
+    rc_control.rpy_des[2] = -driverCommand->leftStickAnalog[0] * kScaleRPY; // Yaw = -LX
+    rc_control.height_variation = driverCommand->leftStickAnalog[1] * kScaleH; // Height = LY
+
+    // [DEBUG] Print Stick Values
+    static int s_stick_log = 0;
+    if (s_stick_log++ % 50 == 0) {
+        LOG_INFO("[GAMEPAD] LX={:.3f} LY={:.3f} RX={:.3f} RY={:.3f}", 
+                 (double)driverCommand->leftStickAnalog[0], (double)driverCommand->leftStickAnalog[1],
+                 (double)driverCommand->rightStickAnalog[0], (double)driverCommand->rightStickAnalog[1]);
+    }
+  }
 
   static int count_ini(0);
   ++count_ini;
@@ -103,7 +185,7 @@ void RobotRunner::run() {
     _legController->setEnabled(true);
 
     if( (rc_control.mode == 0) && controlParameters->use_rc ) {
-      if(count_ini%1000 ==0)   printf("ESTOP!\n");
+      if(count_ini%1000 ==0)   LOG_WARN("ESTOP!");
       for (int leg = 0; leg < 4; leg++) {
         _legController->commands[leg].zero();
       }
@@ -179,7 +261,7 @@ void RobotRunner::setupStep() {
   // state estimator
   // check transition to cheater mode:
   if (!_cheaterModeEnabled && controlParameters->cheater_mode) {
-    printf("[RobotRunner] Transitioning to Cheater Mode...\n");
+    LOG_INFO("[RobotRunner] Transitioning to Cheater Mode...");
     initializeStateEstimator(true);
     // todo any configuration
     _cheaterModeEnabled = true;
@@ -187,7 +269,7 @@ void RobotRunner::setupStep() {
 
   // check transition from cheater mode:
   if (_cheaterModeEnabled && !controlParameters->cheater_mode) {
-    printf("[RobotRunner] Transitioning from Cheater Mode...\n");
+    LOG_INFO("[RobotRunner] Transitioning from Cheater Mode...");
     initializeStateEstimator(false);
     // todo any configuration
     _cheaterModeEnabled = false;

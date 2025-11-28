@@ -26,6 +26,7 @@ if(MINI_CHEETAH_BUILD)
   -Wextra -Wcast-align -Wdisabled-optimization -Wformat=2 \
   -Winit-self -Wmissing-include-dirs -Woverloaded-virtual \
   -Wshadow -Wsign-promo -Werror")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=overloaded-virtual -Wno-error=unused-parameter")
   set(CMAKE_C_FLAGS "-O3  -ggdb -std=gnu99 -I.")
   message("**** Mini-Cheetah build enabled ****")
 else(MINI_CHEETAH_BUILD)
@@ -38,6 +39,7 @@ else(MINI_CHEETAH_BUILD)
     -Wextra -Wcast-align -Wdisabled-optimization -Wformat=2 \
     -Winit-self -Wmissing-include-dirs -Woverloaded-virtual \
     -Wshadow -Wsign-promo -Werror")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=overloaded-virtual -Wno-error=unused-parameter")
   elseif(APPLE)
     set(CMAKE_CXX_FLAGS "-O3 -march=native -ggdb -Wall \
     -Wextra -Wcast-align -Wdisabled-optimization -Wformat=2 \

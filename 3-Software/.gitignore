@@ -28,3 +28,4 @@ documentation/doxygen/html
 documentation/doxygen/latex
 .DS_Store
 tags
+mc-build/

@@ -20,6 +20,18 @@ public:
         INIT_PARAMETER(Kd_foot),
         INIT_PARAMETER(Kp_joint),
         INIT_PARAMETER(Kd_joint),
+        INIT_PARAMETER(foot_x_offset_0),
+        INIT_PARAMETER(foot_x_offset_1),
+        INIT_PARAMETER(foot_x_offset_2),
+        INIT_PARAMETER(foot_x_offset_3),
+        INIT_PARAMETER(foot_y_offset_0),
+        INIT_PARAMETER(foot_y_offset_1),
+        INIT_PARAMETER(foot_y_offset_2),
+        INIT_PARAMETER(foot_y_offset_3),
+        INIT_PARAMETER(foot_z_offset_0),
+        INIT_PARAMETER(foot_z_offset_1),
+        INIT_PARAMETER(foot_z_offset_2),
+        INIT_PARAMETER(foot_z_offset_3),
         //INIT_PARAMETER(Kp_joint_swing),
         //INIT_PARAMETER(Kd_joint_swing),
         INIT_PARAMETER(Q_pos),
@@ -96,6 +108,18 @@ public:
 
   DECLARE_PARAMETER(Vec3<double>, Kp_joint);
   DECLARE_PARAMETER(Vec3<double>, Kd_joint);
+  DECLARE_PARAMETER(double, foot_x_offset_0);
+  DECLARE_PARAMETER(double, foot_x_offset_1);
+  DECLARE_PARAMETER(double, foot_x_offset_2);
+  DECLARE_PARAMETER(double, foot_x_offset_3);
+  DECLARE_PARAMETER(double, foot_y_offset_0);
+  DECLARE_PARAMETER(double, foot_y_offset_1);
+  DECLARE_PARAMETER(double, foot_y_offset_2);
+  DECLARE_PARAMETER(double, foot_y_offset_3);
+  DECLARE_PARAMETER(double, foot_z_offset_0);
+  DECLARE_PARAMETER(double, foot_z_offset_1);
+  DECLARE_PARAMETER(double, foot_z_offset_2);
+  DECLARE_PARAMETER(double, foot_z_offset_3);
 
   DECLARE_PARAMETER(Vec3<double>, Q_pos);
   DECLARE_PARAMETER(Vec3<double>, Q_vel);

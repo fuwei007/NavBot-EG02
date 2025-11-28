@@ -8,15 +8,30 @@
  */
 
 #include "SafetyChecker.h"
+#include <cmath>
+#include <cstdio>
 
 /**
  * @return safePDesFoot true if safe desired foot placements
  */
 template <typename T>
 bool SafetyChecker<T>::checkSafeOrientation() {
-  if (abs(data->_stateEstimator->getResult().rpy(0)) >= 0.5 ||
-      abs(data->_stateEstimator->getResult().rpy(1)) >= 0.5) {
-        printf("Orientation safety check failed!\n");
+  constexpr T kMaxTilt = (T)0.5;
+  const auto& state = data->_stateEstimator->getResult();
+  const T roll = state.rpy(0);
+  const T pitch = state.rpy(1);
+
+  if (std::abs(roll) >= kMaxTilt || std::abs(pitch) >= kMaxTilt) {
+    std::printf(
+        "[SAFETY][ORI] roll=%.3f rad pitch=%.3f rad limit=%.3f rad "
+        "contact=[%.2f %.2f %.2f %.2f]\n",
+        (double)roll,
+        (double)pitch,
+        (double)kMaxTilt,
+        (double)state.contactEstimate[0],
+        (double)state.contactEstimate[1],
+        (double)state.contactEstimate[2],
+        (double)state.contactEstimate[3]);
     return false;
   } else {
     return true;

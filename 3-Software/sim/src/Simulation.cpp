@@ -491,13 +491,18 @@ void Simulation::buildLcmMessage() {
   auto& state = _simulator->getState();
   auto& dstate = _simulator->getDState();
 
-  Vec3<double> rpy = ori::quatToRPY(state.bodyOrientation);
-  RotMat<double> Rbody = ori::quaternionToRotationMatrix(state.bodyOrientation);
+  Quat<double> e2b = state.bodyOrientation;
+  Quat<double> b2e = e2b;
+  b2e[1] = -b2e[1];
+  b2e[2] = -b2e[2];
+  b2e[3] = -b2e[3];
+  Vec3<double> rpy = ori::quatToRPY(b2e);
+  RotMat<double> Rbody = ori::quaternionToRotationMatrix(e2b);
   Vec3<double> omega = Rbody.transpose() * state.bodyVelocity.head<3>();
   Vec3<double> v = Rbody.transpose() * state.bodyVelocity.tail<3>();
 
   for (size_t i = 0; i < 4; i++) {
-    _simLCM.quat[i] = state.bodyOrientation[i];
+    _simLCM.quat[i] = b2e[i];
   }
 
   for (size_t i = 0; i < 3; i++) {
