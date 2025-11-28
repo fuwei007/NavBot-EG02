@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <thread>
+#include <cstdlib>
 #include "Configuration.h"
 
 #include "HardwareBridge.h"
@@ -19,9 +20,9 @@
 #include "rt/rt_spi.h"
 #include "rt/rt_vectornav.h"
 #include "rt/rt_ethercat.h"
+#include "main_helper.h"
 #include "Utilities/Utilities_print.h"
-
-#define USE_MICROSTRAIN
+#include "Utilities/Log.h"
 
 /*!
  * If an error occurs during initialization, before motors are enabled, print
@@ -30,10 +31,10 @@
  * @param printErrno If true, also print C errno
  */
 void HardwareBridge::initError(const char* reason, bool printErrno) {
-  printf("FAILED TO INITIALIZE HARDWARE: %s\n", reason);
+  LOG_CRITICAL("FAILED TO INITIALIZE HARDWARE: {}", reason);
 
   if (printErrno) {
-    printf("Error: %s\n", strerror(errno));
+    LOG_CRITICAL("Error: {}", strerror(errno));
   }
 
   exit(-1);
@@ -43,20 +44,20 @@ void HardwareBridge::initError(const char* reason, bool printErrno) {
  * All hardware initialization steps that are common between Cheetah 3 and Mini Cheetah
  */
 void HardwareBridge::initCommon() {
-  printf("[HardwareBridge] Init stack\n");
+  LOG_INFO("[HardwareBridge] Init stack");
   prefaultStack();
-  printf("[HardwareBridge] Init scheduler\n");
+  LOG_INFO("[HardwareBridge] Init scheduler");
   setupScheduler();
   if (!_interfaceLCM.good()) {
     initError("_interfaceLCM failed to initialize\n", false);
   }
 
-  printf("[HardwareBridge] Subscribe LCM\n");
+  LOG_INFO("[HardwareBridge] Subscribe LCM");
   _interfaceLCM.subscribe("interface", &HardwareBridge::handleGamepadLCM, this);
   _interfaceLCM.subscribe("interface_request",
                           &HardwareBridge::handleControlParameter, this);
 
-  printf("[HardwareBridge] Start interface LCM handler\n");
+  LOG_INFO("[HardwareBridge] Start interface LCM handler");
   _interfaceLcmThread = std::thread(&HardwareBridge::handleInterfaceLCM, this);
 }
 
@@ -76,7 +77,7 @@ void HardwareBridge::handleInterfaceLCM() {
  * leaves a log) instead of just becoming unresponsive.
  */
 void HardwareBridge::prefaultStack() {
-  printf("[Init] Prefault stack...\n");
+  LOG_INFO("[Init] Prefault stack...");
   volatile char stack[MAX_STACK_SIZE];
   memset(const_cast<char*>(stack), 0, MAX_STACK_SIZE);
   if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) {
@@ -91,7 +92,7 @@ void HardwareBridge::prefaultStack() {
  * Configures the scheduler for real time priority
  */
 void HardwareBridge::setupScheduler() {
-  printf("[Init] Setup RT Scheduler...\n");
+  LOG_INFO("[Init] Setup RT Scheduler...");
   struct sched_param params;
   params.sched_priority = TASK_PRIORITY;
   if (sched_setscheduler(0, SCHED_FIFO, &params) == -1) {
@@ -120,23 +121,23 @@ void HardwareBridge::handleControlParameter(
   (void)chan;
   if (msg->requestNumber <= _parameter_response_lcmt.requestNumber) {
     // nothing to do!
-    printf(
+    LOG_WARN(
         "[HardwareBridge] Warning: the interface has run a ControlParameter "
-        "iteration, but there is no new request!\n");
+        "iteration, but there is no new request!");
     // return;
   }
 
   // sanity check
   s64 nRequests = msg->requestNumber - _parameter_response_lcmt.requestNumber;
   if (nRequests != 1) {
-    printf("[ERROR] Hardware bridge: we've missed %ld requests\n",
+    LOG_ERROR("[ERROR] Hardware bridge: we've missed {} requests",
            nRequests - 1);
   }
 
   switch (msg->requestKind) {
     case (s8)ControlParameterRequestKind::SET_USER_PARAM_BY_NAME: {
       if(!_userControlParameters) {
-        printf("[Warning] Got user param %s, but not using user parameters!\n",
+        LOG_WARN("[Warning] Got user param {}, but not using user parameters!",
                (char*)msg->name);
       } else {
         std::string name((char*)msg->name);
@@ -169,16 +170,17 @@ void HardwareBridge::handleControlParameter(
                name.c_str());  // just for debugging print statements
         _parameter_response_lcmt.requestKind = msg->requestKind;
 
-        printf("[User Control Parameter] set %s to %s\n", name.c_str(),
+        LOG_INFO("[User Control Parameter] set {} to {}", name,
                controlParameterValueToString(
-                   v, (ControlParameterValueKind)msg->parameterKind)
-                   .c_str());
+                   v, (ControlParameterValueKind)msg->parameterKind));
       }
     } break;
 
     case (s8)ControlParameterRequestKind::SET_ROBOT_PARAM_BY_NAME: {
       std::string name((char*)msg->name);
       ControlParameter& param = _robotParams.collection.lookup(name);
+      const bool ignoreCheater =
+          (!gMasterConfig.simulated) && (name == "cheater_mode");
 
       // type check
       if ((s8)param._kind != msg->parameterKind) {
@@ -192,25 +194,39 @@ void HardwareBridge::handleControlParameter(
 
       // do the actual set
       ControlParameterValue v;
-      memcpy(&v, msg->value, sizeof(v));
-      param.set(v, (ControlParameterValueKind)msg->parameterKind);
+      if (ignoreCheater) {
+        static bool warned = false;
+        if (!warned) {
+          LOG_WARN(
+              "[HardwareBridge] Ignoring cheater_mode update while running on "
+              "hardware");
+          warned = true;
+        }
+        v = param.get(param._kind);
+      } else {
+        memcpy(&v, msg->value, sizeof(v));
+        param.set(v, (ControlParameterValueKind)msg->parameterKind);
+      }
 
       // respond:
       _parameter_response_lcmt.requestNumber =
           msg->requestNumber;  // acknowledge that the set has happened
       _parameter_response_lcmt.parameterKind =
           msg->parameterKind;  // just for debugging print statements
-      memcpy(_parameter_response_lcmt.value, msg->value, 64);
+      memset(_parameter_response_lcmt.value, 0,
+             sizeof(_parameter_response_lcmt.value));
+      memcpy(_parameter_response_lcmt.value, &v, sizeof(v));
       //_parameter_response_lcmt.value = _parameter_request_lcmt.value; // just
       //for debugging print statements
       strcpy((char*)_parameter_response_lcmt.name,
              name.c_str());  // just for debugging print statements
       _parameter_response_lcmt.requestKind = msg->requestKind;
 
-      printf("[Robot Control Parameter] set %s to %s\n", name.c_str(),
-             controlParameterValueToString(
-                 v, (ControlParameterValueKind)msg->parameterKind)
-                 .c_str());
+      if (!ignoreCheater) {
+        LOG_INFO("[Robot Control Parameter] set {} to {}", name,
+               controlParameterValueToString(
+                   v, (ControlParameterValueKind)msg->parameterKind));
+      }
 
     } break;
 
@@ -224,7 +240,7 @@ void HardwareBridge::handleControlParameter(
 
 
 MiniCheetahHardwareBridge::MiniCheetahHardwareBridge(RobotController* robot_ctrl, bool load_parameters_from_file)
-    : HardwareBridge(robot_ctrl), _spiLcm(getLcmUrl(255)), _microstrainLcm(getLcmUrl(255)) {
+    : HardwareBridge(robot_ctrl), _spiLcm(getLcmUrl(255)), _imuLcm(getLcmUrl(255)) {
   _load_parameters_from_file = load_parameters_from_file;
 }
 
@@ -236,49 +252,67 @@ void MiniCheetahHardwareBridge::run() {
   initHardware();
 
   if(_load_parameters_from_file) {
-    printf("[Hardware Bridge] Loading parameters from file...\n");
+    LOG_INFO("[Hardware Bridge] Loading parameters from file...");
 
     try {
       _robotParams.initializeFromYamlFile(THIS_COM "config/mini-cheetah-defaults.yaml");
     } catch(std::exception& e) {
-      printf("Failed to initialize robot parameters from yaml file: %s\n", e.what());
+      LOG_ERROR("Failed to initialize robot parameters from yaml file: {}", e.what());
       exit(1);
     }
 
     if(!_robotParams.isFullyInitialized()) {
-      printf("Failed to initialize all robot parameters\n");
+      LOG_ERROR("Failed to initialize all robot parameters");
       exit(1);
     }
 
-    printf("Loaded robot parameters\n");
+    LOG_INFO("Loaded robot parameters");
 
     if(_userControlParameters) {
+      std::string userParamPath = THIS_COM "config/mc-mit-ctrl-user-parameters.yaml";
+      bool hasTauFF = false;
+      bool hasKdJointVec = false;
       try {
-        _userControlParameters->initializeFromYamlFile(THIS_COM "config/mc-mit-ctrl-user-parameters.yaml");
+        (void)_userControlParameters->collection.lookup("tau_ff");
+        hasTauFF = true;
+      } catch (std::exception&) {
+        hasTauFF = false;
+      }
+      try {
+        (void)_userControlParameters->collection.lookup("Kd_joint");
+        hasKdJointVec = true;
+      } catch (std::exception&) {
+        hasKdJointVec = false;
+      }
+      if (hasTauFF && !hasKdJointVec) {
+        userParamPath = THIS_COM "config/mc-jpos-user-parameters.yaml";
+      }
+      try {
+        _userControlParameters->initializeFromYamlFile(userParamPath);
       } catch(std::exception& e) {
-        printf("Failed to initialize user parameters from yaml file: %s\n", e.what());
+        LOG_ERROR("Failed to initialize user parameters from yaml file: {}", e.what());
         exit(1);
       }
 
       if(!_userControlParameters->isFullyInitialized()) {
-        printf("Failed to initialize all user parameters\n");
+        LOG_ERROR("Failed to initialize all user parameters");
         exit(1);
       }
 
-      printf("Loaded user parameters\n");
+      LOG_INFO("Loaded user parameters");
     } else {
-      printf("Did not load user parameters because there aren't any\n");
+      LOG_INFO("Did not load user parameters because there aren't any");
     }
   } else {
-    printf("[Hardware Bridge] Loading parameters over LCM...\n");
+    LOG_INFO("[Hardware Bridge] Loading parameters over LCM...");
     while (!_robotParams.isFullyInitialized()) {
-      printf("[Hardware Bridge] Waiting for robot parameters...\n");
+      LOG_INFO("[Hardware Bridge] Waiting for robot parameters...");
       usleep(1000000);
     }
 
     if(_userControlParameters) {
       while (!_userControlParameters->isFullyInitialized()) {
-        printf("[Hardware Bridge] Waiting for user parameters...\n");
+        LOG_INFO("[Hardware Bridge] Waiting for user parameters...");
         usleep(1000000);
       }
     }
@@ -286,7 +320,13 @@ void MiniCheetahHardwareBridge::run() {
 
 
 
-  printf("[Hardware Bridge] Got all parameters, starting up!\n");
+  LOG_INFO("[Hardware Bridge] Got all parameters, starting up!");
+  _robotParams.use_rc = 0;
+  LOG_INFO("[Hardware Bridge] use_rc overridden to 0 (gamepad mode)");
+  if (_robotParams.cheater_mode != 0) {
+    _robotParams.cheater_mode = 0;
+    LOG_WARN("[Hardware Bridge] cheater_mode overridden to 0 (cheater state unavailable on hardware)");
+  }
 
   _robotRunner =
       new RobotRunner(_controller, &taskManager, _robotParams.controller_dt, "robot-control");
@@ -311,9 +351,9 @@ void MiniCheetahHardwareBridge::run() {
       &taskManager, .002, "spi", &MiniCheetahHardwareBridge::runSpi, this);
   spiTask.start();
 
-  // microstrain
-  if(_microstrainInit)
-    _microstrainThread = std::thread(&MiniCheetahHardwareBridge::runMicrostrain, this);
+  // IMU
+  if (_imuInit)
+    _imuThread = std::thread(&MiniCheetahHardwareBridge::runImu, this);
 
   // robot controller start
   _robotRunner->start();
@@ -324,16 +364,15 @@ void MiniCheetahHardwareBridge::run() {
       &MiniCheetahHardwareBridge::publishVisualizationLCM, this);
   visualizationLCMTask.start();
 
-  // rc controller
-  _port = init_sbus(false);  // Not Simulation
-  PeriodicMemberFunction<HardwareBridge> sbusTask(
-      &taskManager, .005, "rc_controller", &HardwareBridge::run_sbus, this);
-  sbusTask.start();
+  _gamepadThread = std::thread(&MiniCheetahHardwareBridge::runGamepad, this);
+  if (!_gamepadInit) {
+    LOG_WARN("[Gamepad] Warning: no joystick detected, commands will remain zero until it becomes available.");
+  }
 
-  // temporary hack: microstrain logger
-  PeriodicMemberFunction<MiniCheetahHardwareBridge> microstrainLogger(
-      &taskManager, .001, "microstrain-logger", &MiniCheetahHardwareBridge::logMicrostrain, this);
-  microstrainLogger.start();
+  // IMU logger
+  PeriodicMemberFunction<MiniCheetahHardwareBridge> imuLogger(
+      &taskManager, .001, "imu-logger", &MiniCheetahHardwareBridge::logImu, this);
+  imuLogger.start();
 
   for (;;) {
     usleep(1000000);
@@ -353,26 +392,47 @@ void HardwareBridge::run_sbus() {
   }
 }
 
-void MiniCheetahHardwareBridge::runMicrostrain() {
-  while(true) {
-    _microstrainImu.run();
-
-#ifdef USE_MICROSTRAIN
-    _vectorNavData.accelerometer = _microstrainImu.acc;
-    _vectorNavData.quat[0] = _microstrainImu.quat[1];
-    _vectorNavData.quat[1] = _microstrainImu.quat[2];
-    _vectorNavData.quat[2] = _microstrainImu.quat[3];
-    _vectorNavData.quat[3] = _microstrainImu.quat[0];
-    _vectorNavData.gyro = _microstrainImu.gyro;
-#endif
+void MiniCheetahHardwareBridge::runImu() {
+  while (true) {
+    _wheeltecImu.run();
+    if (_imuInit && _wheeltecImu.isInitialized()) {
+      _wheeltecImu.copyToVectorNav(&_vectorNavData);
+    } else {
+      usleep(1000);
+    }
   }
-
-
 }
 
-void MiniCheetahHardwareBridge::logMicrostrain() {
-  _microstrainImu.updateLCM(&_microstrainData);
-  _microstrainLcm.publish("microstrain", &_microstrainData);
+void MiniCheetahHardwareBridge::runGamepad() {
+  GamepadCommand localCommand;
+  while (true) {
+    if (!_linuxGamepad.isOpen()) {
+      _gamepadInit = false;
+      _gamepadCommand.zero();
+      if (!_gamepadDevice.empty()) {
+        if (_linuxGamepad.openDevice(_gamepadDevice)) {
+          LOG_INFO("[Gamepad] Reconnected to {}", _gamepadDevice);
+          _gamepadInit = true;
+        }
+      }
+      usleep(200000);
+      continue;
+    }
+
+    if (_linuxGamepad.poll(localCommand)) {
+      _gamepadCommand = localCommand;
+    } else {
+      usleep(5000);
+    }
+  }
+}
+
+void MiniCheetahHardwareBridge::logImu() {
+  if (!_imuInit || !_wheeltecImu.isInitialized())
+    return;
+
+  _wheeltecImu.updateLCM(&_imuData);
+  _imuLcm.publish("microstrain", &_imuData);
 }
 
 /*!
@@ -380,29 +440,40 @@ void MiniCheetahHardwareBridge::logMicrostrain() {
  */
 void MiniCheetahHardwareBridge::initHardware() {
   _vectorNavData.quat << 1, 0, 0, 0;
-#ifndef USE_MICROSTRAIN
-  printf("[MiniCheetahHardware] Init vectornav\n");
-  if (!init_vectornav(&_vectorNavData)) {
-    printf("Vectornav failed to initialize\n");
-    //initError("failed to initialize vectornav!\n", false);
-  }
-#endif
+  _vectorNavData.accelerometer.setZero();
+  _vectorNavData.gyro.setZero();
 
   init_spi();
-  _microstrainInit = _microstrainImu.tryInit(0, 921600);
-}
 
-void Cheetah3HardwareBridge::initHardware() {
-  _vectorNavData.quat << 1, 0, 0, 0;
-  printf("[Cheetah 3 Hardware] Init vectornav\n");
-  if (!init_vectornav(&_vectorNavData)) {
-    printf("Vectornav failed to initialize\n");
-    printf_color(PrintColor::Red, "****************\n"
-                                  "**  WARNING!  **\n"
-                                  "****************\n"
-                                  "  IMU DISABLED  \n"
-                                  "****************\n\n");
-    //initError("failed to initialize vectornav!\n", false);
+  const char* gamepadEnv = std::getenv("F710_DEVICE");
+  _gamepadDevice = gamepadEnv ? gamepadEnv : std::string("/dev/input/js0");
+  _gamepadInit = _linuxGamepad.openDevice(_gamepadDevice);
+  if (_gamepadInit) {
+    LOG_INFO("[Gamepad] Using {} for Logitech F710 input", _gamepadDevice);
+  } else {
+    LOG_ERROR(
+                 "[Gamepad] Failed to open {}. Gamepad commands will stay zero until it becomes available.",
+                 _gamepadDevice);
+  }
+
+  const char* portEnv = std::getenv("H30_IMU_PORT");
+  std::string device = portEnv ? portEnv : "/dev/ttyACM0";
+
+  int baud = 460800;
+  if (const char* baudEnv = std::getenv("H30_IMU_BAUD")) {
+    int parsed = std::atoi(baudEnv);
+    if (parsed > 0) {
+      baud = parsed;
+    }
+  }
+
+  _imuInit = _wheeltecImu.tryInit(device, baud);
+  if (!_imuInit) {
+    LOG_ERROR(
+                 "[WheeltecImu] Failed to initialize on {} @ {} baud",
+                 device, baud);
+  } else {
+    LOG_INFO("[WheeltecImu] Streaming from {} @ {} baud", device, baud);
   }
 }
 
@@ -420,6 +491,18 @@ void MiniCheetahHardwareBridge::runSpi() {
   _spiLcm.publish("spi_data", data);
   _spiLcm.publish("spi_command", cmd);
 }
+
+void Cheetah3HardwareBridge::initHardware() {
+  _vectorNavData.quat << 1, 0, 0, 0;
+  LOG_INFO("[Cheetah 3 Hardware] Init vectornav");
+  if (!init_vectornav(&_vectorNavData)) {
+    LOG_ERROR("Vectornav failed to initialize");
+    LOG_CRITICAL("****************\n**  WARNING!  **\n****************\n  IMU DISABLED  \n****************");
+    //initError("failed to initialize vectornav!\n", false);
+  }
+}
+
+
 
 void Cheetah3HardwareBridge::runEcat() {
   rt_ethercat_set_command(_tiBoardCommand);
@@ -526,20 +609,20 @@ void Cheetah3HardwareBridge::run() {
   initCommon();
   initHardware();
 
-  printf("[Hardware Bridge] Loading parameters over LCM...\n");
+  LOG_INFO("[Hardware Bridge] Loading parameters over LCM...");
   while (!_robotParams.isFullyInitialized()) {
-    printf("[Hardware Bridge] Waiting for robot parameters...\n");
+    LOG_INFO("[Hardware Bridge] Waiting for robot parameters...");
     usleep(1000000);
   }
 
   if(_userControlParameters) {
     while (!_userControlParameters->isFullyInitialized()) {
-      printf("[Hardware Bridge] Waiting for user parameters...\n");
+      LOG_INFO("[Hardware Bridge] Waiting for user parameters...");
       usleep(1000000);
     }
   }
 
-  printf("[Hardware Bridge] Got all parameters, starting up!\n");
+  LOG_INFO("[Hardware Bridge] Got all parameters, starting up!");
 
   _robotRunner =
       new RobotRunner(_controller, &taskManager, _robotParams.controller_dt, "robot-control");

@@ -79,6 +79,11 @@ class RobotRunner : public PeriodicTask {
 
   FloatingBaseModel<float> _model;
   u64 _iterations = 0;
+
+  bool _gamepadPrevStart = false;
+  bool _gamepadPrevBack = false;
+  bool _gamepadPrevY = false;
+  bool _gamepadPrevX = false;
 };
 
 #endif  // PROJECT_ROBOTRUNNER_H

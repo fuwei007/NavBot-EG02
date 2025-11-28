@@ -5,8 +5,13 @@ add_subdirectory(osqp)
 add_subdirectory(JCQP)
 add_subdirectory(qpOASES)
 add_subdirectory(lord_imu)
+add_subdirectory(wheeltec_imu)
 add_subdirectory(SOEM)
 
 if(CMAKE_SYSTEM_NAME MATCHES Linux)
 add_subdirectory(vectornav)
 endif()
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+add_subdirectory(spdlog)
+set_property(TARGET spdlog PROPERTY POSITION_INDEPENDENT_CODE ON)

@@ -36,7 +36,7 @@ QT5_WRAP_CPP(tst_hdr_moc ${QOBJECT_HEADERS})
 include_directories("include/")
 include_directories("../common/include/")
 include_directories("../lcm-types/cpp")
-include_directories("/usr/local/include/lcm/")   # lcm includes
+include_directories("/usr/include/lcm/")   # lcm includes
 include_directories("../third-party/ParamHandler")
 include_directories(${CMAKE_BINARY_DIR})
 file(GLOB sources "src/*.cpp")
@@ -51,7 +51,7 @@ include_directories(${OPENGL_INCLUDE_DIR})
 
 add_executable(sim ${sources} ${tst_hdr_moc})
 target_link_libraries(sim biomimetics pthread lcm inih dynacore_param_handler 
-    Qt5::Widgets Qt5::Core Qt5::Gui Qt5::Gamepad ${QT_LIBRARIES} ${OPENGL_LIBRARIES})
+    Qt5::Widgets Qt5::Core Qt5::Gui Qt5::Gamepad ${QT_LIBRARIES} ${OPENGL_LIBRARIES} spdlog::spdlog)
 
 if (CMAKE_SYSTEM_NAME MATCHES Linux)
   target_link_libraries(sim rt ${GLUT_glut_LIBRARIES})

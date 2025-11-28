@@ -8,8 +8,10 @@
 #include <inttypes.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string>
 #include <stdexcept>
+#include <unistd.h>
 
 #include <lcm/lcm-cpp.hpp>
 
@@ -19,6 +21,32 @@
 #include "vectornav_lcmt.hpp"
 
 #define K_MINI_CHEETAH_VECTOR_NAV_SERIAL "/dev/ttyS0"
+
+namespace {
+
+std::string resolve_vectornav_serial() {
+  const char* override_port = getenv("MC_VECTORNAV_PORT");
+  if (override_port && override_port[0]) {
+    return override_port;
+  }
+
+  const char* candidates[] = {
+      K_MINI_CHEETAH_VECTOR_NAV_SERIAL,
+      "/dev/ttyTHS2",
+      "/dev/ttyTHS1",
+      "/dev/ttyUSB0"
+  };
+
+  for (const char* candidate : candidates) {
+    if (candidate && access(candidate, F_OK) == 0) {
+      return candidate;
+    }
+  }
+
+  return K_MINI_CHEETAH_VECTOR_NAV_SERIAL;
+}
+
+}  // namespace
 
 //#define PRINT_VECTORNAV_DEBUG
 
@@ -54,14 +82,15 @@ bool init_vectornav(VectorNavData* vn_data) {
   VnError error;
   VpeBasicControlRegister vpeReg;
   ImuFilteringConfigurationRegister filtReg;
-  const char SENSOR_PORT[] = K_MINI_CHEETAH_VECTOR_NAV_SERIAL;
+  std::string sensor_port = resolve_vectornav_serial();
+  const char* SENSOR_PORT = sensor_port.c_str();
   const uint32_t SENSOR_BAUDRATE = 115200;
   char modelNumber[30];
   char strConversions[50];
   uint32_t newHz, oldHz;
   // uint32_t hz_desired = 200;
 
-  printf("[rt_vectornav] init_vectornav()\n");
+  printf("[rt_vectornav] init_vectornav() on %s\n", SENSOR_PORT);
 
   // initialize vectornav library
   VnSensor_initialize(&(vn.vs));

@@ -8,8 +8,8 @@ include_directories(SYSTEM "../../third-party/qpOASES/include")
 include_directories("../../third-party/ParamHandler")
 
 include_directories("../../lcm-types/cpp")
-include_directories("/usr/local/include/lcm/")   # lcm includes
-include_directories("/usr/local/include/eigen3")   # lcm includes
+include_directories("/usr/include/lcm/")   # lcm includes
+include_directories("/usr/include/eigen3")   # lcm includes
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${PROJECT_SOURCE_DIR})
 
@@ -29,3 +29,4 @@ target_link_libraries(mit_ctrl dynacore_param_handler qpOASES)
 target_link_libraries(mit_ctrl Goldfarb_Optimizer osqp)
 target_link_libraries(mit_ctrl WBC_Ctrl)
 target_link_libraries(mit_ctrl VisionMPC)
+target_link_libraries(mit_ctrl spdlog::spdlog)

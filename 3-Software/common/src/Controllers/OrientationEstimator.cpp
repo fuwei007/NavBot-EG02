@@ -11,6 +11,8 @@
  */
 
 #include "Controllers/OrientationEstimator.h"
+#include <cstdio>
+#include "Utilities/Log.h"
 
 /*!
  * Get quaternion, rotation matrix, angular velocity (body and world),
@@ -80,6 +82,28 @@ void VectorNavOrientationEstimator<T>::run() {
   this->_stateEstimatorData.result->aWorld =
       this->_stateEstimatorData.result->rBody.transpose() *
       this->_stateEstimatorData.result->aBody;
+
+  static int s_imu_log_decimator = 0;
+  if ((s_imu_log_decimator++ % 500) == 0) {
+    const auto& quat = this->_stateEstimatorData.result->orientation;
+    const auto& rpy = this->_stateEstimatorData.result->rpy;
+    const auto& gyro = this->_stateEstimatorData.result->omegaBody;
+    const auto& acc = this->_stateEstimatorData.result->aBody;
+    LOG_INFO("[IMU] quat=[{:.3f} {:.3f} {:.3f} {:.3f}] rpy=[{:.3f} {:.3f} {:.3f}] gyro=[{:.3f} {:.3f} {:.3f}] acc=[{:.3f} {:.3f} {:.3f}]",
+                static_cast<double>(quat[0]),
+                static_cast<double>(quat[1]),
+                static_cast<double>(quat[2]),
+                static_cast<double>(quat[3]),
+                static_cast<double>(rpy[0]),
+                static_cast<double>(rpy[1]),
+                static_cast<double>(rpy[2]),
+                static_cast<double>(gyro[0]),
+                static_cast<double>(gyro[1]),
+                static_cast<double>(gyro[2]),
+                static_cast<double>(acc[0]),
+                static_cast<double>(acc[1]),
+                static_cast<double>(acc[2]));
+  }
 }
 
 

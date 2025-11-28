@@ -1,6 +1,7 @@
 #ifndef FSM_STATE_STANDUP_H
 #define FSM_STATE_STANDUP_H
 
+#include <array>
 #include "FSM_State.h"
 
 /**
@@ -29,9 +30,11 @@ class FSM_State_StandUp : public FSM_State<T> {
   TransitionData<T> testTransition();
 
  private:
-  // Keep track of the control iterations
-  int iter = 0;
+ // Keep track of the control iterations
+ int iter = 0;
   std::vector< Vec3<T> > _ini_foot_pos;
+  std::array<T,4> _ini_abad{};
+  std::array<Vec3<T>, 4> _ini_joint_q{};
 };
 
 #endif  // FSM_STATE_STANDUP_H

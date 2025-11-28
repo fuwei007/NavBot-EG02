@@ -1,0 +1,12 @@
+{
+  "cmake.buildDirectory": "${workspaceFolder}/mc-build",
+  "cmake.generator": "Unix Makefiles",
+  "cmake.configureArgs": [
+    "-DMINI_CHEETAH_BUILD=TRUE",
+    "-DJCQP_USE_AVX2=OFF"
+  ],
+  "cmake.buildArgs": [
+    "-j12"
+  ],
+  "cmake.configureOnOpen": true
+}

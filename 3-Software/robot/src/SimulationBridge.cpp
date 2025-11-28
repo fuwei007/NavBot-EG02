@@ -5,10 +5,11 @@
  */
 
 #include "SimulationBridge.h"
+#include <cstdlib>
+#include <unistd.h>
+
 #include "Utilities/SegfaultHandler.h"
 #include "Controllers/LegController.h"
-#include "rt/rt_rc_interface.h"
-#include "rt/rt_sbus.h"
 
 /*!
  * Connect to a simulation
@@ -70,8 +71,7 @@ void SimulationBridge::run() {
       _sharedMemory().robotIsDone();
     }
   } catch (std::exception& e) {
-    strncpy(_sharedMemory().robotToSim.errorMessage, e.what(), sizeof(_sharedMemory().robotToSim.errorMessage));
-    _sharedMemory().robotToSim.errorMessage[sizeof(_sharedMemory().robotToSim.errorMessage) - 1] = '\0';
+    snprintf(_sharedMemory().robotToSim.errorMessage, sizeof(_sharedMemory().robotToSim.errorMessage), "%s", e.what());
     throw e;
   }
 
@@ -230,8 +230,21 @@ void SimulationBridge::runRobotControl() {
     }
 
 
-    _robotRunner->driverCommand =
-        &_sharedMemory().simToRobot.gamepadCommand;
+    _gamepadCommand.zero();
+    const char* gamepadEnv = std::getenv("F710_DEVICE");
+    _gamepadDevice = gamepadEnv ? gamepadEnv : std::string("/dev/input/js0");
+    _gamepadInit = _linuxGamepad.openDevice(_gamepadDevice);
+    if (_gamepadInit) {
+      printf("[Gamepad] Using %s for Logitech F710 input\n", _gamepadDevice.c_str());
+    } else {
+      printf("[Gamepad] Failed to open %s. Falling back to simulator inputs and retrying...\n",
+             _gamepadDevice.c_str());
+    }
+
+    _gamepadThread = std::thread(&SimulationBridge::runGamepad, this);
+    _gamepadThread.detach();
+
+    _robotRunner->driverCommand = &_gamepadCommand;
     _robotRunner->spiData = &_sharedMemory().simToRobot.spiData;
     _robotRunner->tiBoardData = _sharedMemory().simToRobot.tiBoardData;
     _robotRunner->robotType = _robot;
@@ -246,27 +259,38 @@ void SimulationBridge::runRobotControl() {
     _robotRunner->cheetahMainVisualization =
         &_sharedMemory().robotToSim.mainCheetahVisualization;
 
+    _robotParams.use_rc = 0;
+    printf("[Simulation Bridge] use_rc overridden to 0 (gamepad mode)\n");
+
     _robotRunner->init();
     _firstControllerRun = false;
+  }
 
-    sbus_thread = new std::thread(&SimulationBridge::run_sbus, this);
+  if (!_gamepadInit) {
+    _gamepadCommand = _sharedMemory().simToRobot.gamepadCommand;
   }
   _robotRunner->run();
 }
 
-/*!
- * Run the RC receive thread
- */
-void SimulationBridge::run_sbus() {
-  printf("[run_sbus] starting...\n");
-  int port = init_sbus(true);  // Simulation
+void SimulationBridge::runGamepad() {
+  GamepadCommand localCommand;
   while (true) {
-    if (port > 0) {
-      int x = receive_sbus(port);
-      if (x) {
-        sbus_packet_complete();
+    if (!_linuxGamepad.isOpen()) {
+      _gamepadInit = false;
+      if (!_gamepadDevice.empty()) {
+        if (_linuxGamepad.openDevice(_gamepadDevice)) {
+          printf("[Gamepad] Reconnected to %s\n", _gamepadDevice.c_str());
+          _gamepadInit = true;
+        }
       }
+      usleep(200000);
+      continue;
     }
-    usleep(5000);
+
+    if (_linuxGamepad.poll(localCommand)) {
+      _gamepadCommand = localCommand;
+    } else {
+      usleep(5000);
+    }
   }
 }

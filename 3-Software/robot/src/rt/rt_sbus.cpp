@@ -38,6 +38,36 @@ uint16_t channel_data[18];
 /**@brief Name of SBUS serial port on the mini cheetah*/
 #define K_SBUS_PORT_MC "/dev/ttyS4"
 
+namespace {
+
+std::string resolve_sbus_port(bool is_simulator) {
+  if (is_simulator) {
+    return K_SBUS_PORT_SIM;
+  }
+
+  const char* override_port = getenv("MC_SBUS_PORT");
+  if (override_port && override_port[0]) {
+    return override_port;
+  }
+
+  const char* candidates[] = {
+      K_SBUS_PORT_MC,
+      "/dev/ttyTHS1",
+      "/dev/ttyTHS0",
+      "/dev/ttyUSB0"
+  };
+
+  for (const char* candidate : candidates) {
+    if (candidate && access(candidate, F_OK) == 0) {
+      return candidate;
+    }
+  }
+
+  return K_SBUS_PORT_MC;
+}
+
+}  // namespace
+
 /*!
  * Unpack sbus message into channels
  */
@@ -151,13 +181,8 @@ int receive_sbus(int port) {
  * Initialize SBUS serial port
  */
 int init_sbus(int is_simulator) {
-  // char *port1;
-  std::string port1;
-  if (is_simulator) {
-    port1 = K_SBUS_PORT_SIM;
-  } else {
-    port1 = K_SBUS_PORT_MC;
-  }
+  std::string port1 = resolve_sbus_port(is_simulator);
+  printf("[SBUS] Using serial port %s\n", port1.c_str());
 
   if (pthread_mutex_init(&sbus_data_m, NULL) != 0) {
     printf("Failed to initialize sbus data mutex.\n");

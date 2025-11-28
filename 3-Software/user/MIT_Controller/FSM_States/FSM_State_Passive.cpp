@@ -5,6 +5,8 @@
  */
 
 #include "FSM_State_Passive.h"
+#include <cstdio>
+#include "Utilities/Log.h"
 
 /**
  * Constructor for the FSM State that passes in state specific info to
@@ -38,6 +40,18 @@ void FSM_State_Passive<T>::onEnter() {
  */
 template <typename T>
 void FSM_State_Passive<T>::run() {
+  static int s_q_log_decimator = 0;
+  if ((s_q_log_decimator++ % 500) == 0) {
+    for (int leg = 0; leg < 4; ++leg) {
+      auto& legData = this->_data->_legController->datas[leg];
+      LOG_INFO("[PASSIVE] leg{} q=[{:.3f} {:.3f} {:.3f}]",
+                  leg,
+                  (double)legData.q[0],
+                  (double)legData.q[1],
+                  (double)legData.q[2]);
+    }
+  }
+
   // Do nothing, all commands should begin as zeros
   testTransition();
 }

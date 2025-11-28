@@ -40,6 +40,7 @@ struct GamepadCommand {
     y = false;
     leftStickButton = false;
     rightStickButton = false;
+    logitechButton = false;
 
     leftTriggerAnalog = 0;
     rightTriggerAnalog = 0;

@@ -7,10 +7,12 @@
 #ifndef PROJECT_SIMULATIONDRIVER_H
 #define PROJECT_SIMULATIONDRIVER_H
 
+#include <string>
 #include <thread>
 
 #include "ControlParameters/RobotParameters.h"
 #include "RobotRunner.h"
+#include "SimUtilities/LinuxGamepad.h"
 #include "SimUtilities/SimulatorMessage.h"
 #include "Types.h"
 #include "Utilities/PeriodicTask.h"
@@ -28,12 +30,11 @@ class SimulationBridge {
   void run();
   void handleControlParameters();
   void runRobotControl();
+  void runGamepad();
   ~SimulationBridge() {
     delete _fakeTaskManager;
     delete _robotRunner;
   }
-  void run_sbus();
-
  private:
   PeriodicTaskManager taskManager;
   bool _firstControllerRun = true;
@@ -45,8 +46,12 @@ class SimulationBridge {
   RobotControlParameters _robotParams;
   ControlParameters* _userParams = nullptr;
   u64 _iterations = 0;
+  GamepadCommand _gamepadCommand;
+  LinuxGamepad _linuxGamepad;
+  bool _gamepadInit = false;
+  std::string _gamepadDevice;
+  std::thread _gamepadThread;
 
-  std::thread* sbus_thread;
 };
 
 #endif  // PROJECT_SIMULATIONDRIVER_H

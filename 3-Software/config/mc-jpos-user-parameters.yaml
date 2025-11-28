@@ -1,0 +1,8 @@
+# Generated for JPos_Controller on Mini Cheetah
+__collection-name__: user-parameters
+
+tau_ff : 0.0
+kp     : 1.0
+kd     : 0.1
+zero   : 0.0
+calibrate : 0.0

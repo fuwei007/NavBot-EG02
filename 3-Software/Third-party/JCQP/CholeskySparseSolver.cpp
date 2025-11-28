@@ -9,8 +9,19 @@
 #include "Timer.h"
 #include "amd.h"
 #include <iostream>
-#include <immintrin.h>
 
+// --- BEGIN FIX FOR CROSS-COMPILATION (ARM/Jetson) ---
+#if defined(__i386__) || defined(__x86_64__)
+  // This is an Intel x86 platform, include the AVX header.
+  #include <immintrin.h>
+#else
+  // This is NOT an Intel platform (e.g., ARM on Jetson).
+  // Force-disable AVX optimizations, even if CMake incorrectly enabled it.
+  #ifdef JCQP_USE_AVX2
+    #undef JCQP_USE_AVX2
+  #endif
+#endif
+// --- END FIX FOR CROSS-COMPILATION ---
 
 template<typename T>
 void CholeskySparseSolver<T>::preSetup(const DenseMatrix<T> &kktMat, bool b_print)

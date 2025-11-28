@@ -13,6 +13,7 @@
 #include "Utilities/PeriodicTask.h"
 #include "Utilities/Timer.h"
 #include "Utilities/Utilities_print.h"
+#include "Utilities/Log.h"
 
 
 /*!
@@ -32,8 +33,8 @@ PeriodicTask::PeriodicTask(PeriodicTaskManager* taskManager, float period,
  */
 void PeriodicTask::start() {
   if (_running) {
-    printf("[PeriodicTask] Tried to start %s but it was already running!\n",
-           _name.c_str());
+    LOG_WARN("[PeriodicTask] Tried to start {} but it was already running!",
+           _name);
     return;
   }
   init();
@@ -46,14 +47,14 @@ void PeriodicTask::start() {
  */
 void PeriodicTask::stop() {
   if (!_running) {
-    printf("[PeriodicTask] Tried to stop %s but it wasn't running!\n",
-           _name.c_str());
+    LOG_WARN("[PeriodicTask] Tried to stop {} but it wasn't running!",
+           _name);
     return;
   }
   _running = false;
-  printf("[PeriodicTask] Waiting for %s to stop...\n", _name.c_str());
+  LOG_INFO("[PeriodicTask] Waiting for {} to stop...", _name);
   _thread.join();
-  printf("[PeriodicTask] Done!\n");
+  LOG_INFO("[PeriodicTask] Done!");
   cleanup();
 }
 
@@ -78,11 +79,11 @@ void PeriodicTask::clearMax() {
 void PeriodicTask::printStatus() {
   if (!_running) return;
   if (isSlow()) {
-    printf_color(PrintColor::Red, "|%-20s|%6.4f|%6.4f|%6.4f|%6.4f|%6.4f\n",
-                 _name.c_str(), _lastRuntime, _maxRuntime, _period,
+    LOG_WARN("|{:<20}|{:6.4f}|{:6.4f}|{:6.4f}|{:6.4f}|{:6.4f}",
+                 _name, _lastRuntime, _maxRuntime, _period,
                  _lastPeriodTime, _maxPeriod);
   } else {
-    printf("|%-20s|%6.4f|%6.4f|%6.4f|%6.4f|%6.4f\n", _name.c_str(),
+    LOG_INFO("|{:<20}|{:6.4f}|{:6.4f}|{:6.4f}|{:6.4f}|{:6.4f}", _name,
            _lastRuntime, _maxRuntime, _period, _lastPeriodTime, _maxPeriod);
   }
 }
@@ -110,7 +111,7 @@ void PeriodicTask::loopFunction() {
 #endif
   unsigned long long missed = 0;
 
-  printf("[PeriodicTask] Start %s (%d s, %d ns)\n", _name.c_str(), seconds,
+  LOG_INFO("[PeriodicTask] Start {} ({} s, {} ns)", _name, seconds,
          nanoseconds);
   while (_running) {
     _lastPeriodTime = (float)t.getSeconds();
@@ -124,7 +125,7 @@ void PeriodicTask::loopFunction() {
     _maxPeriod = std::max(_maxPeriod, _lastPeriodTime);
     _maxRuntime = std::max(_maxRuntime, _lastRuntime);
   }
-  printf("[PeriodicTask] %s has stopped!\n", _name.c_str());
+  LOG_INFO("[PeriodicTask] {} has stopped!", _name);
 }
 
 PeriodicTaskManager::~PeriodicTaskManager() {}
@@ -140,15 +141,15 @@ void PeriodicTaskManager::addTask(PeriodicTask* task) {
  * Print the status of all tasks and rest max statistics
  */
 void PeriodicTaskManager::printStatus() {
-  printf("\n----------------------------TASKS----------------------------\n");
-  printf("|%-20s|%-6s|%-6s|%-6s|%-6s|%-6s\n", "name", "rt", "rt-max", "T-des",
+  LOG_INFO("\n----------------------------TASKS----------------------------");
+  LOG_INFO("|{:<20}|{:<6}|{:<6}|{:<6}|{:<6}|{:<6}", "name", "rt", "rt-max", "T-des",
          "T-act", "T-max");
-  printf("-----------------------------------------------------------\n");
+  LOG_INFO("-----------------------------------------------------------");
   for (auto& task : _tasks) {
     task->printStatus();
     task->clearMax();
   }
-  printf("-------------------------------------------------------------\n\n");
+  LOG_INFO("-------------------------------------------------------------\n");
 }
 
 /*!
